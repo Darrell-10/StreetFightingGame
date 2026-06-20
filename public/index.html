@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Battle Arena</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a1a;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── SCREENS ── */
+    .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+    .screen.active { display: flex; }
+
+    /* ── LOBBY ── */
+    #lobby-screen {
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 70%);
+      gap: 24px;
+    }
+    .game-title {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      font-weight: 900;
+      background: linear-gradient(135deg, #ff6b35, #f7c948, #ff6b35);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: none;
+      letter-spacing: 4px;
+      text-align: center;
+    }
+    .subtitle { color: #aaa; font-size: 1rem; letter-spacing: 2px; margin-top: -12px; }
+    .lobby-btns { display: flex; flex-direction: column; gap: 14px; width: 260px; }
+    .btn {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 1px;
+    }
+    .btn-primary { background: linear-gradient(135deg, #ff6b35, #f7c948); color: #1a0a00; }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+    .btn:active { transform: scale(0.96); }
+    .room-input-row { display: flex; gap: 8px; width: 260px; }
+    .room-input {
+      flex: 1;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      text-align: center;
+    }
+    .room-input:focus { outline: none; border-color: #f7c948; }
+    .room-code-display {
+      font-size: 2.5rem;
+      font-weight: 900;
+      letter-spacing: 10px;
+      color: #f7c948;
+      text-align: center;
+      padding: 16px 32px;
+      background: rgba(247,201,72,0.08);
+      border: 2px dashed rgba(247,201,72,0.4);
+      border-radius: 12px;
+    }
+    .waiting-text { color: #aaa; font-size: 0.9rem; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .error-text { color: #ff4444; font-size: 0.9rem; }
+
+    /* ── CHARACTER SELECT ── */
+    #charselect-screen {
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 70%);
+      gap: 20px;
+      padding: 20px;
+    }
+    .cs-title { font-size: 1.8rem; font-weight: 700; letter-spacing: 3px; color: #f7c948; }
+    .cs-subtitle { color: #aaa; font-size: 0.85rem; }
+    .characters-grid {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 700px;
+    }
+    .char-card {
+      width: 120px;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 16px 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      position: relative;
+    }
+    .char-card:hover { border-color: rgba(255,255,255,0.4); transform: translateY(-3px); }
+    .char-card.selected { border-color: #f7c948; background: rgba(247,201,72,0.12); }
+    .char-card.opponent-selected { border-color: #ff4444; background: rgba(255,68,68,0.08); }
+    .char-icon { font-size: 3rem; margin-bottom: 6px; }
+    .char-name { font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; }
+    .char-role { font-size: 0.7rem; color: #aaa; margin-top: 2px; }
+    .char-stats { display: flex; gap: 4px; flex-direction: column; margin-top: 8px; }
+    .stat-bar-row { display: flex; align-items: center; gap: 4px; font-size: 0.6rem; color: #888; }
+    .stat-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
+    .stat-fill { height: 100%; border-radius: 2px; }
+    .cs-waiting { color: #aaa; font-size: 0.9rem; animation: pulse 1.5s infinite; margin-top: 8px; }
+    .player-tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; position: absolute; top: 6px; right: 6px; font-weight: 700; }
+    .tag-you { background: rgba(247,201,72,0.3); color: #f7c948; }
+    .tag-opp { background: rgba(255,68,68,0.3); color: #ff6b6b; }
+
+    /* ── GAME SCREEN ── */
+    #game-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Canvas */
+    #game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+    }
+
+    /* HUD */
+    .hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 10px 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+    .health-section { flex: 1; }
+    .health-section.right { display: flex; flex-direction: column; align-items: flex-end; }
+    .player-hud-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+    .health-bar-wrap {
+      width: 100%;
+      max-width: 240px;
+      height: 18px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .health-bar { height: 100%; transition: width 0.15s ease; }
+    .health-bar.p1 { background: linear-gradient(90deg, #ff4444, #ff6b35); }
+    .health-bar.p2 { background: linear-gradient(90deg, #4488ff, #44ddff); float: right; }
+    .timer-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 60px;
+    }
+    .timer { font-size: 2rem; font-weight: 900; color: #f7c948; line-height: 1; }
+    .round-label { font-size: 0.6rem; color: #aaa; letter-spacing: 2px; }
+    .super-bar-wrap {
+      width: 100%;
+      max-width: 240px;
+      height: 8px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+    .super-bar { height: 100%; transition: width 0.2s ease; }
+    .super-bar.p1 { background: linear-gradient(90deg, #a855f7, #ec4899); }
+    .super-bar.p2 { background: linear-gradient(90deg, #06b6d4, #a855f7); float: right; }
+
+    /* Controls overlay */
+    .controls-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 10px 14px 14px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Joystick */
+    .joystick-area {
+      width: 140px;
+      height: 140px;
+      position: relative;
+      pointer-events: all;
+    }
+    .joystick-base {
+      width: 120px;
+      height: 120px;
+      background: rgba(0,0,0,0.45);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+    .joystick-knob {
+      width: 44px;
+      height: 44px;
+      background: radial-gradient(circle, rgba(255,255,255,0.5), rgba(255,255,255,0.15));
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      transition: transform 0.05s;
+      pointer-events: none;
+    }
+
+    /* Action buttons */
+    .action-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: all;
+    }
+    .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
+    .action-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: none;
+      font-size: 0.65rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: all 0.1s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .action-btn .btn-icon { font-size: 1.3rem; line-height: 1; }
+    .action-btn:active { transform: scale(0.88); }
+    .btn-punch { background: radial-gradient(circle, #ff6b35, #c0392b); color: #fff; box-shadow: 0 0 14px rgba(255,107,53,0.5); }
+    .btn-kick  { background: radial-gradient(circle, #f7c948, #c47f0a); color: #1a0a00; box-shadow: 0 0 14px rgba(247,201,72,0.5); }
+    .btn-super { background: radial-gradient(circle, #a855f7, #6d28d9); color: #fff; box-shadow: 0 0 14px rgba(168,85,247,0.6); width: 72px; height: 72px; font-size: 0.65rem; }
+    .btn-block { background: radial-gradient(circle, #4488ff, #1d4ed8); color: #fff; box-shadow: 0 0 14px rgba(68,136,255,0.4); }
+    .btn-super.on-cooldown { opacity: 0.4; }
+
+    /* Announce overlay */
+    .announce-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .announce-text {
+      font-size: clamp(2.5rem, 10vw, 5rem);
+      font-weight: 900;
+      text-align: center;
+      color: #fff;
+      text-shadow: 0 0 30px rgba(247,201,72,0.8), 0 4px 0 rgba(0,0,0,0.6);
+      letter-spacing: 4px;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .announce-text.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Round end / game over */
+    #result-screen {
+      background: rgba(0,0,0,0.85);
+      gap: 20px;
+      z-index: 30;
+    }
+    .result-title { font-size: clamp(2rem, 8vw, 4rem); font-weight: 900; letter-spacing: 4px; }
+    .result-sub { color: #aaa; font-size: 1rem; }
+    .result-btns { display: flex; gap: 14px; }
+
+    /* Responsive tweaks */
+    @media (max-width: 480px) {
+      .action-btn { width: 58px; height: 58px; }
+      .btn-super { width: 64px; height: 64px; }
+      .joystick-area { width: 120px; height: 120px; }
+      .joystick-base { width: 100px; height: 100px; top: 10px; left: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ LOBBY ═══════════════ -->
+<div id="lobby-screen" class="screen active">
+  <div class="game-title">BATTLE<br>ARENA</div>
+  <div class="subtitle">1 V S 1 &nbsp;·&nbsp; M U L T I P L A Y E R</div>
+
+  <div id="lobby-main" style="display:flex;flex-direction:column;gap:14px;align-items:center;">
+    <div class="lobby-btns">
+      <button class="btn btn-primary" onclick="createRoom()">⚔️ &nbsp;CREATE ROOM</button>
+      <div style="text-align:center;color:#555;font-size:0.8rem;">— or —</div>
+      <div class="room-input-row">
+        <input class="room-input" id="join-code-input" placeholder="CODE" maxlength="5" />
+        <button class="btn btn-secondary" onclick="joinRoom()" style="padding:12px 16px;">JOIN</button>
+      </div>
+      <div id="lobby-error" class="error-text" style="text-align:center;display:none;"></div>
+    </div>
+  </div>
+
+  <div id="lobby-waiting" style="display:none;flex-direction:column;align-items:center;gap:16px;">
+    <div style="color:#aaa;font-size:0.85rem;letter-spacing:1px;">SHARE THIS CODE WITH YOUR FRIEND</div>
+    <div class="room-code-display" id="room-code-text">-----</div>
+    <div class="waiting-text">Waiting for opponent to join…</div>
+  </div>
+</div>
+
+<!-- ═══════════════ CHARACTER SELECT ═══════════════ -->
+<div id="charselect-screen" class="screen">
+  <div class="cs-title">SELECT YOUR FIGHTER</div>
+  <div class="cs-subtitle" id="cs-player-label">YOU ARE PLAYER 1</div>
+  <div class="characters-grid" id="characters-grid"></div>
+  <div class="cs-waiting" id="cs-waiting" style="display:none;">Waiting for opponent to pick…</div>
+</div>
+
+<!-- ═══════════════ GAME ═══════════════ -->
+<div id="game-screen" class="screen">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <div class="hud">
+    <div class="health-section">
+      <div class="player-hud-name" id="hud-p1-name">PLAYER 1</div>
+      <div class="health-bar-wrap"><div class="health-bar p1" id="hud-p1-hp" style="width:100%"></div></div>
+      <div class="super-bar-wrap"><div class="super-bar p1" id="hud-p1-super" style="width:0%"></div></div>
+    </div>
+    <div class="timer-box">
+      <div class="round-label">TIME</div>
+      <div class="timer" id="hud-timer">99</div>
+    </div>
+    <div class="health-section right">
+      <div class="player-hud-name" id="hud-p2-name" style="text-align:right;">PLAYER 2</div>
+      <div class="health-bar-wrap"><div class="health-bar p2" id="hud-p2-hp" style="width:100%"></div></div>
+      <div class="super-bar-wrap"><div class="super-bar p2" id="hud-p2-super" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-overlay">
+    <div class="joystick-area" id="joystick-area">
+      <div class="joystick-base" id="joystick-base">
+        <div class="joystick-knob" id="joystick-knob"></div>
+      </div>
+    </div>
+    <div class="action-buttons">
+      <div class="btn-row">
+        <button class="action-btn btn-block" id="btn-block" ontouchstart="actionPress('block')" ontouchend="actionRelease('block')" onmousedown="actionPress('block')" onmouseup="actionRelease('block')">
+          <span class="btn-icon">🛡</span>BLOCK
+        </button>
+        <button class="action-btn btn-punch" ontouchstart="actionPress('punch')" ontouchend="actionRelease('punch')" onmousedown="actionPress('punch')" onmouseup="actionRelease('punch')">
+          <span class="btn-icon">👊</span>PUNCH
+        </button>
+      </div>
+      <div class="btn-row">
+        <button class="action-btn btn-super" id="btn-super" ontouchstart="actionPress('super')" ontouchend="actionRelease('super')" onmousedown="actionPress('super')" onmouseup="actionRelease('super')">
+          <span class="btn-icon">✨</span>SUPER
+        </button>
+        <button class="action-btn btn-kick" ontouchstart="actionPress('kick')" ontouchend="actionRelease('kick')" onmousedown="actionPress('kick')" onmouseup="actionRelease('kick')">
+          <span class="btn-icon">🦵</span>KICK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Announce overlay -->
+  <div class="announce-overlay">
+    <div class="announce-text" id="announce-text"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ RESULT ═══════════════ -->
+<div id="result-screen" class="screen">
+  <div class="result-title" id="result-title">WINNER!</div>
+  <div class="result-sub" id="result-sub">Player 1 wins the match</div>
+  <div class="result-btns">
+    <button class="btn btn-primary" onclick="requestRematch()">🔁 &nbsp;REMATCH</button>
+    <button class="btn btn-secondary" onclick="goToLobby()">🏠 &nbsp;LOBBY</button>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="characters.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
