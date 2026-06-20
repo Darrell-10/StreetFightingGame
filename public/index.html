@@ -4,12 +4,24 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Battle Arena</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --pixel: 'Press Start 2P', monospace;
+      --gold:   #f7c948;
+      --red:    #ff3333;
+      --blue:   #3af;
+      --purple: #b44fff;
+      --green:  #00ff88;
+      --bg:     #05050f;
+      --panel:  #0d0d22;
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      background: #0a0a1a;
+      background: var(--bg);
       color: #fff;
-      font-family: 'Segoe UI', sans-serif;
+      font-family: var(--pixel);
       overflow: hidden;
       width: 100vw;
       height: 100vh;
@@ -17,295 +29,371 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
+      image-rendering: pixelated;
     }
 
-    /* ── SCREENS ── */
-    .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; }
+    /* ─── SCANLINES ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.18) 2px,
+        rgba(0,0,0,0.18) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+    /* CRT vignette */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* ─── SCREENS ─── */
+    .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
     .screen.active { display: flex; }
 
-    /* ── LOBBY ── */
-    #lobby-screen {
-      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 70%);
-      gap: 24px;
+    /* ══════════════════════════════════════
+       LOBBY SCREEN
+    ══════════════════════════════════════ */
+    #lobby-screen { background: var(--bg); }
+
+    /* Pixel stars background */
+    .stars-bg {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
     }
-    .game-title {
-      font-size: clamp(2.5rem, 8vw, 5rem);
-      font-weight: 900;
-      background: linear-gradient(135deg, #ff6b35, #f7c948, #ff6b35);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      text-shadow: none;
+    .star { position: absolute; background: #fff; border-radius: 0; }
+
+    /* Arcade cabinet art — drawn via canvas */
+    #lobby-art {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* Title */
+    .arcade-title-wrap {
+      position: relative;
+      text-align: center;
+      margin-bottom: 8px;
+      z-index: 2;
+    }
+    .arcade-title {
+      font-family: var(--pixel);
+      font-size: clamp(1.4rem, 5vw, 2.6rem);
+      color: var(--gold);
+      text-shadow:
+        4px 4px 0 #c0392b,
+        8px 8px 0 rgba(0,0,0,0.5);
       letter-spacing: 4px;
+      line-height: 1.5;
+      animation: title-flicker 6s infinite;
+    }
+    @keyframes title-flicker {
+      0%,95%,100% { opacity: 1; }
+      96% { opacity: 0.7; }
+      97% { opacity: 1; }
+      98% { opacity: 0.5; }
+      99% { opacity: 1; }
+    }
+    .arcade-subtitle {
+      font-family: var(--pixel);
+      font-size: clamp(0.4rem, 1.5vw, 0.6rem);
+      color: var(--blue);
+      letter-spacing: 3px;
+      margin-top: 6px;
+      animation: color-cycle 3s linear infinite;
+    }
+    @keyframes color-cycle {
+      0%   { color: var(--blue); }
+      33%  { color: var(--purple); }
+      66%  { color: var(--green); }
+      100% { color: var(--blue); }
+    }
+
+    /* Fighter silhouettes row */
+    .fighter-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 0;
+      margin: 4px 0 12px;
+      z-index: 2;
+      position: relative;
+    }
+    .fighter-row canvas { image-rendering: pixelated; }
+
+    /* Insert coin blink */
+    .insert-coin {
+      font-family: var(--pixel);
+      font-size: clamp(0.45rem, 1.8vw, 0.7rem);
+      color: #fff;
+      letter-spacing: 2px;
+      animation: blink 0.9s step-end infinite;
+      margin-bottom: 16px;
+      z-index: 2;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Main lobby panel */
+    .lobby-panel {
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: var(--panel);
+      border: 3px solid var(--gold);
+      box-shadow: 0 0 0 2px #000, 0 0 20px rgba(247,201,72,0.3), inset 0 0 30px rgba(0,0,0,0.5);
+      padding: 20px 24px;
+      width: min(320px, 90vw);
+      image-rendering: pixelated;
+    }
+    .panel-title {
+      font-family: var(--pixel);
+      font-size: 0.55rem;
+      color: var(--gold);
+      letter-spacing: 2px;
+      border-bottom: 2px solid rgba(247,201,72,0.3);
+      padding-bottom: 10px;
+      width: 100%;
       text-align: center;
     }
-    .subtitle { color: #aaa; font-size: 1rem; letter-spacing: 2px; margin-top: -12px; }
-    .lobby-btns { display: flex; flex-direction: column; gap: 14px; width: 260px; }
+
     .btn {
-      padding: 14px 28px;
-      border: none;
-      border-radius: 8px;
-      font-size: 1.1rem;
-      font-weight: 700;
+      font-family: var(--pixel);
+      font-size: clamp(0.45rem, 1.5vw, 0.6rem);
+      padding: 12px 20px;
+      border: 3px solid;
       cursor: pointer;
-      transition: all 0.15s;
       letter-spacing: 1px;
+      transition: all 0.05s;
+      width: 100%;
+      text-align: center;
+      image-rendering: pixelated;
+      position: relative;
     }
-    .btn-primary { background: linear-gradient(135deg, #ff6b35, #f7c948); color: #1a0a00; }
-    .btn-secondary { background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-    .btn:active { transform: scale(0.96); }
-    .room-input-row { display: flex; gap: 8px; width: 260px; }
+    .btn::after {
+      content: '';
+      position: absolute;
+      bottom: -6px; right: -6px;
+      width: 100%; height: 100%;
+      z-index: -1;
+    }
+    .btn:active { transform: translate(3px, 3px); }
+    .btn:active::after { bottom: -3px; right: -3px; }
+
+    .btn-primary {
+      background: var(--red);
+      color: #fff;
+      border-color: #ff8888;
+      box-shadow: 4px 4px 0 #7a0000;
+      text-shadow: 2px 2px 0 #7a0000;
+    }
+    .btn-primary:active { box-shadow: 1px 1px 0 #7a0000; }
+
+    .btn-secondary {
+      background: #111;
+      color: var(--gold);
+      border-color: var(--gold);
+      box-shadow: 4px 4px 0 #6b5500;
+      font-size: clamp(0.4rem, 1.3vw, 0.55rem);
+      padding: 10px 14px;
+      width: auto;
+    }
+    .btn-secondary:active { box-shadow: 1px 1px 0 #6b5500; }
+
+    .divider {
+      font-family: var(--pixel);
+      font-size: 0.45rem;
+      color: #444;
+      letter-spacing: 3px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .room-input-row { display: flex; gap: 8px; width: 100%; align-items: center; }
     .room-input {
       flex: 1;
-      padding: 12px 14px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 8px;
-      color: #fff;
-      font-size: 1.1rem;
+      padding: 10px 8px;
+      background: #000;
+      border: 3px solid var(--gold);
+      color: var(--green);
+      font-family: var(--pixel);
+      font-size: clamp(0.6rem, 2vw, 0.85rem);
       text-transform: uppercase;
-      letter-spacing: 3px;
+      letter-spacing: 4px;
       text-align: center;
+      box-shadow: inset 0 0 10px rgba(0,255,100,0.1);
     }
-    .room-input:focus { outline: none; border-color: #f7c948; }
-    .room-code-display {
-      font-size: 2.5rem;
-      font-weight: 900;
-      letter-spacing: 10px;
-      color: #f7c948;
-      text-align: center;
-      padding: 16px 32px;
-      background: rgba(247,201,72,0.08);
-      border: 2px dashed rgba(247,201,72,0.4);
-      border-radius: 12px;
-    }
-    .waiting-text { color: #aaa; font-size: 0.9rem; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .error-text { color: #ff4444; font-size: 0.9rem; }
+    .room-input:focus { outline: none; box-shadow: inset 0 0 10px rgba(0,255,100,0.2), 0 0 8px var(--green); }
+    .room-input::placeholder { color: #333; letter-spacing: 2px; }
 
-    /* ── CHARACTER SELECT ── */
-    #charselect-screen {
-      background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1a 70%);
-      gap: 20px;
-      padding: 20px;
+    .lobby-error {
+      font-family: var(--pixel);
+      font-size: 0.45rem;
+      color: var(--red);
+      text-align: center;
+      animation: blink 0.5s step-end 6;
+      display: none;
+      letter-spacing: 1px;
     }
-    .cs-title { font-size: 1.8rem; font-weight: 700; letter-spacing: 3px; color: #f7c948; }
-    .cs-subtitle { color: #aaa; font-size: 0.85rem; }
+
+    /* Waiting state */
+    #lobby-waiting { display: none; flex-direction: column; align-items: center; gap: 14px; z-index: 2; }
+    .share-label {
+      font-family: var(--pixel);
+      font-size: 0.45rem;
+      color: #aaa;
+      letter-spacing: 2px;
+    }
+    .room-code-display {
+      font-family: var(--pixel);
+      font-size: clamp(1.6rem, 6vw, 2.4rem);
+      color: var(--green);
+      letter-spacing: 10px;
+      text-align: center;
+      padding: 14px 24px;
+      background: #000;
+      border: 3px solid var(--green);
+      box-shadow: 0 0 16px rgba(0,255,136,0.4), inset 0 0 20px rgba(0,255,136,0.05);
+      animation: code-glow 1.5s ease-in-out infinite alternate;
+    }
+    @keyframes code-glow {
+      from { box-shadow: 0 0 10px rgba(0,255,136,0.3); }
+      to   { box-shadow: 0 0 24px rgba(0,255,136,0.7); }
+    }
+    .waiting-dots {
+      font-family: var(--pixel);
+      font-size: 0.45rem;
+      color: #aaa;
+      animation: pulse 1.2s infinite;
+      letter-spacing: 1px;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+    /* ══════════════════════════════════════
+       CHARACTER SELECT
+    ══════════════════════════════════════ */
+    #charselect-screen {
+      background: var(--bg);
+      gap: 14px;
+      padding: 16px;
+    }
+    .cs-title {
+      font-family: var(--pixel);
+      font-size: clamp(0.55rem, 2.5vw, 0.9rem);
+      color: var(--gold);
+      letter-spacing: 3px;
+      text-shadow: 3px 3px 0 #7a5500;
+      animation: title-flicker 8s infinite;
+    }
+    .cs-subtitle {
+      font-family: var(--pixel);
+      font-size: 0.45rem;
+      color: var(--blue);
+      letter-spacing: 1px;
+    }
     .characters-grid {
       display: flex;
-      gap: 14px;
+      gap: 10px;
       flex-wrap: wrap;
       justify-content: center;
       max-width: 700px;
     }
     .char-card {
-      width: 120px;
-      background: rgba(255,255,255,0.05);
-      border: 2px solid rgba(255,255,255,0.1);
-      border-radius: 14px;
-      padding: 16px 10px;
+      width: 110px;
+      background: #0a0a1a;
+      border: 3px solid #333;
+      padding: 12px 8px;
       cursor: pointer;
-      transition: all 0.2s;
+      transition: all 0.1s;
       text-align: center;
       position: relative;
+      box-shadow: 4px 4px 0 #000;
     }
-    .char-card:hover { border-color: rgba(255,255,255,0.4); transform: translateY(-3px); }
-    .char-card.selected { border-color: #f7c948; background: rgba(247,201,72,0.12); }
-    .char-card.opponent-selected { border-color: #ff4444; background: rgba(255,68,68,0.08); }
-    .char-icon { font-size: 3rem; margin-bottom: 6px; }
-    .char-name { font-size: 0.85rem; font-weight: 700; letter-spacing: 1px; }
-    .char-role { font-size: 0.7rem; color: #aaa; margin-top: 2px; }
-    .char-stats { display: flex; gap: 4px; flex-direction: column; margin-top: 8px; }
-    .stat-bar-row { display: flex; align-items: center; gap: 4px; font-size: 0.6rem; color: #888; }
-    .stat-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; }
-    .stat-fill { height: 100%; border-radius: 2px; }
-    .cs-waiting { color: #aaa; font-size: 0.9rem; animation: pulse 1.5s infinite; margin-top: 8px; }
-    .player-tag { font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; position: absolute; top: 6px; right: 6px; font-weight: 700; }
-    .tag-you { background: rgba(247,201,72,0.3); color: #f7c948; }
-    .tag-opp { background: rgba(255,68,68,0.3); color: #ff6b6b; }
+    .char-card:hover { border-color: #888; transform: translate(-2px,-2px); box-shadow: 6px 6px 0 #000; }
+    .char-card.selected { border-color: var(--gold); background: rgba(247,201,72,0.08); box-shadow: 4px 4px 0 #6b5500, 0 0 12px rgba(247,201,72,0.4); }
+    .char-card.opponent-selected { border-color: var(--red); background: rgba(255,51,51,0.06); box-shadow: 4px 4px 0 #7a0000; }
+    .char-icon { font-size: 2.4rem; margin-bottom: 6px; }
+    .char-name { font-family: var(--pixel); font-size: 0.45rem; color: #fff; letter-spacing: 1px; }
+    .char-role { font-family: var(--pixel); font-size: 0.35rem; color: #888; margin-top: 3px; }
+    .char-stats { display: flex; gap: 3px; flex-direction: column; margin-top: 8px; }
+    .stat-bar-row { display: flex; align-items: center; gap: 3px; font-family: var(--pixel); font-size: 0.3rem; color: #666; }
+    .stat-bar { flex: 1; height: 5px; background: #111; border: 1px solid #333; overflow: hidden; }
+    .stat-fill { height: 100%; }
+    .cs-waiting { font-family: var(--pixel); font-size: 0.4rem; color: #aaa; animation: pulse 1.2s infinite; margin-top: 6px; letter-spacing: 2px; }
+    .player-tag { font-family: var(--pixel); font-size: 0.35rem; padding: 2px 4px; position: absolute; top: 4px; right: 4px; font-weight: 700; }
+    .tag-you { background: var(--gold); color: #000; }
+    .tag-opp { background: var(--red); color: #fff; }
 
-    /* ── GAME SCREEN ── */
-    #game-screen {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+    /* ══════════════════════════════════════
+       GAME SCREEN (unchanged layout)
+    ══════════════════════════════════════ */
+    #game-screen { position: relative; width: 100%; height: 100%; overflow: hidden; }
+    #game-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 
-    /* Canvas */
-    #game-canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-      image-rendering: pixelated;
-    }
-
-    /* HUD */
-    .hud {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      padding: 10px 16px;
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      pointer-events: none;
-      z-index: 10;
-    }
+    .hud { position: absolute; top: 0; left: 0; right: 0; padding: 8px 12px; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; z-index: 10; }
     .health-section { flex: 1; }
     .health-section.right { display: flex; flex-direction: column; align-items: flex-end; }
-    .player-hud-name { font-size: 0.75rem; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
-    .health-bar-wrap {
-      width: 100%;
-      max-width: 240px;
-      height: 18px;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.2);
-      border-radius: 4px;
-      overflow: hidden;
-    }
+    .player-hud-name { font-family: var(--pixel); font-size: 0.45rem; letter-spacing: 1px; margin-bottom: 4px; color: #fff; text-shadow: 1px 1px 0 #000; }
+    .health-bar-wrap { width: 100%; max-width: 240px; height: 16px; background: #000; border: 2px solid #555; overflow: hidden; }
     .health-bar { height: 100%; transition: width 0.15s ease; }
-    .health-bar.p1 { background: linear-gradient(90deg, #ff4444, #ff6b35); }
-    .health-bar.p2 { background: linear-gradient(90deg, #4488ff, #44ddff); float: right; }
-    .timer-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-width: 60px;
-    }
-    .timer { font-size: 2rem; font-weight: 900; color: #f7c948; line-height: 1; }
-    .round-label { font-size: 0.6rem; color: #aaa; letter-spacing: 2px; }
-    .super-bar-wrap {
-      width: 100%;
-      max-width: 240px;
-      height: 8px;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 3px;
-    }
+    .health-bar.p1 { background: linear-gradient(90deg, #ff2222, #ff6b35); }
+    .health-bar.p2 { background: linear-gradient(90deg, #2244ff, #44ddff); float: right; }
+    .timer-box { display: flex; flex-direction: column; align-items: center; min-width: 60px; }
+    .timer { font-family: var(--pixel); font-size: 1.6rem; color: var(--gold); line-height: 1; text-shadow: 2px 2px 0 #7a5500; }
+    .round-label { font-family: var(--pixel); font-size: 0.35rem; color: #aaa; letter-spacing: 2px; }
+    .super-bar-wrap { width: 100%; max-width: 240px; height: 7px; background: #000; border: 1px solid #333; overflow: hidden; margin-top: 3px; }
     .super-bar { height: 100%; transition: width 0.2s ease; }
     .super-bar.p1 { background: linear-gradient(90deg, #a855f7, #ec4899); }
     .super-bar.p2 { background: linear-gradient(90deg, #06b6d4, #a855f7); float: right; }
 
-    /* Controls overlay */
-    .controls-overlay {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      padding: 10px 14px 14px;
-      pointer-events: none;
-      z-index: 10;
-    }
+    .controls-overlay { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-end; padding: 10px 14px 14px; pointer-events: none; z-index: 10; }
+    .joystick-area { width: 140px; height: 140px; position: relative; pointer-events: all; }
+    .joystick-base { width: 120px; height: 120px; background: rgba(0,0,0,0.6); border: 3px solid rgba(255,255,255,0.2); border-radius: 50%; position: absolute; top: 10px; left: 10px; }
+    .joystick-knob { width: 44px; height: 44px; background: radial-gradient(circle, rgba(255,255,255,0.6), rgba(255,255,255,0.2)); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); transition: transform 0.05s; pointer-events: none; }
 
-    /* Joystick */
-    .joystick-area {
-      width: 140px;
-      height: 140px;
-      position: relative;
-      pointer-events: all;
-    }
-    .joystick-base {
-      width: 120px;
-      height: 120px;
-      background: rgba(0,0,0,0.45);
-      border: 2px solid rgba(255,255,255,0.15);
-      border-radius: 50%;
-      position: absolute;
-      top: 10px;
-      left: 10px;
-    }
-    .joystick-knob {
-      width: 44px;
-      height: 44px;
-      background: radial-gradient(circle, rgba(255,255,255,0.5), rgba(255,255,255,0.15));
-      border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%;
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      transition: transform 0.05s;
-      pointer-events: none;
-    }
-
-    /* Action buttons */
-    .action-buttons {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: all;
-    }
+    .action-buttons { display: flex; flex-direction: column; gap: 8px; pointer-events: all; }
     .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
-    .action-btn {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      border: none;
-      font-size: 0.65rem;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 2px;
-      transition: all 0.1s;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-    .action-btn .btn-icon { font-size: 1.3rem; line-height: 1; }
-    .action-btn:active { transform: scale(0.88); }
-    .btn-punch { background: radial-gradient(circle, #ff6b35, #c0392b); color: #fff; box-shadow: 0 0 14px rgba(255,107,53,0.5); }
-    .btn-kick  { background: radial-gradient(circle, #f7c948, #c47f0a); color: #1a0a00; box-shadow: 0 0 14px rgba(247,201,72,0.5); }
-    .btn-super { background: radial-gradient(circle, #a855f7, #6d28d9); color: #fff; box-shadow: 0 0 14px rgba(168,85,247,0.6); width: 72px; height: 72px; font-size: 0.65rem; }
-    .btn-block { background: radial-gradient(circle, #4488ff, #1d4ed8); color: #fff; box-shadow: 0 0 14px rgba(68,136,255,0.4); }
-    .btn-super.on-cooldown { opacity: 0.4; }
+    .action-btn { width: 64px; height: 64px; border-radius: 50%; border: 3px solid; font-family: var(--pixel); font-size: 0.4rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: all 0.08s; -webkit-tap-highlight-color: transparent; user-select: none; }
+    .action-btn .btn-icon { font-size: 1.2rem; line-height: 1; }
+    .action-btn:active { transform: scale(0.87); }
+    .btn-punch { background: #c0392b; border-color: #ff7766; color: #fff; box-shadow: 0 4px 0 #7a0000, 0 0 12px rgba(255,60,50,0.4); }
+    .btn-kick  { background: #c47f0a; border-color: #f7c948; color: #fff; box-shadow: 0 4px 0 #6b5500, 0 0 12px rgba(247,201,72,0.4); }
+    .btn-super { background: #6d28d9; border-color: #c084fc; color: #fff; box-shadow: 0 4px 0 #3b0a8a, 0 0 14px rgba(168,85,247,0.5); width: 72px; height: 72px; }
+    .btn-block { background: #1d4ed8; border-color: #60a5fa; color: #fff; box-shadow: 0 4px 0 #0a2070, 0 0 12px rgba(68,136,255,0.4); }
+    .btn-super.on-cooldown { opacity: 0.35; }
 
-    /* Announce overlay */
-    .announce-overlay {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 20;
-      pointer-events: none;
-    }
-    .announce-text {
-      font-size: clamp(2.5rem, 10vw, 5rem);
-      font-weight: 900;
-      text-align: center;
-      color: #fff;
-      text-shadow: 0 0 30px rgba(247,201,72,0.8), 0 4px 0 rgba(0,0,0,0.6);
-      letter-spacing: 4px;
-      opacity: 0;
-      transform: scale(0.5);
-      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-    .announce-text.visible {
-      opacity: 1;
-      transform: scale(1);
-    }
+    .announce-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none; }
+    .announce-text { font-family: var(--pixel); font-size: clamp(1.5rem, 8vw, 3.5rem); text-align: center; color: #fff; text-shadow: 4px 4px 0 var(--red), 8px 8px 0 rgba(0,0,0,0.5); letter-spacing: 4px; opacity: 0; transform: scale(0.5); transition: all 0.2s cubic-bezier(0.175,0.885,0.32,1.275); }
+    .announce-text.visible { opacity: 1; transform: scale(1); }
 
-    /* Round end / game over */
-    #result-screen {
-      background: rgba(0,0,0,0.85);
-      gap: 20px;
-      z-index: 30;
-    }
-    .result-title { font-size: clamp(2rem, 8vw, 4rem); font-weight: 900; letter-spacing: 4px; }
-    .result-sub { color: #aaa; font-size: 1rem; }
-    .result-btns { display: flex; gap: 14px; }
+    /* ══════════════════════════════════════
+       RESULT SCREEN
+    ══════════════════════════════════════ */
+    #result-screen { background: rgba(0,0,0,0.9); gap: 20px; z-index: 30; }
+    .result-title { font-family: var(--pixel); font-size: clamp(1rem, 5vw, 2rem); letter-spacing: 3px; text-shadow: 4px 4px 0 var(--red); }
+    .result-sub { font-family: var(--pixel); font-size: 0.45rem; color: #aaa; letter-spacing: 1px; }
+    .result-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 
-    /* Responsive tweaks */
     @media (max-width: 480px) {
-      .action-btn { width: 58px; height: 58px; }
-      .btn-super { width: 64px; height: 64px; }
+      .action-btn { width: 56px; height: 56px; }
+      .btn-super { width: 62px; height: 62px; }
       .joystick-area { width: 120px; height: 120px; }
-      .joystick-base { width: 100px; height: 100px; top: 10px; left: 10px; }
+      .joystick-base { width: 100px; height: 100px; }
+      .char-card { width: 95px; }
     }
   </style>
 </head>
@@ -313,44 +401,59 @@
 
 <!-- ═══════════════ LOBBY ═══════════════ -->
 <div id="lobby-screen" class="screen active">
-  <div class="game-title">BATTLE<br>ARENA</div>
-  <div class="subtitle">1 V S 1 &nbsp;·&nbsp; M U L T I P L A Y E R</div>
 
-  <div id="lobby-main" style="display:flex;flex-direction:column;gap:14px;align-items:center;">
-    <div class="lobby-btns">
-      <button class="btn btn-primary" onclick="createRoom()">⚔️ &nbsp;CREATE ROOM</button>
-      <div style="text-align:center;color:#555;font-size:0.8rem;">— or —</div>
+  <!-- Animated pixel background -->
+  <div class="stars-bg" id="stars-bg"></div>
+  <canvas id="lobby-art" width="800" height="600"></canvas>
+
+  <div class="arcade-title-wrap">
+    <div class="arcade-title">⚔ BATTLE ⚔<br>ARENA</div>
+    <div class="arcade-subtitle">── 1 V S 1  ·  M U L T I P L A Y E R ──</div>
+  </div>
+
+  <!-- Pixel fighter silhouettes -->
+  <div class="fighter-row">
+    <canvas id="fighter-canvas" width="340" height="80"></canvas>
+  </div>
+
+  <div class="insert-coin">── INSERT COIN ──</div>
+
+  <div id="lobby-main" style="display:flex;flex-direction:column;gap:0;align-items:center;">
+    <div class="lobby-panel">
+      <div class="panel-title">▶ SELECT MODE ◀</div>
+      <button class="btn btn-primary" onclick="createRoom()">⚔ CREATE ROOM</button>
+      <div class="divider">── OR ──</div>
       <div class="room-input-row">
-        <input class="room-input" id="join-code-input" placeholder="CODE" maxlength="5" />
-        <button class="btn btn-secondary" onclick="joinRoom()" style="padding:12px 16px;">JOIN</button>
+        <input class="room-input" id="join-code-input" placeholder="XXXXXX" maxlength="6" autocomplete="off" autocorrect="off" spellcheck="false" />
+        <button class="btn btn-secondary" onclick="joinRoom()">JOIN</button>
       </div>
-      <div id="lobby-error" class="error-text" style="text-align:center;display:none;"></div>
+      <div class="lobby-error" id="lobby-error"></div>
     </div>
   </div>
 
-  <div id="lobby-waiting" style="display:none;flex-direction:column;align-items:center;gap:16px;">
-    <div style="color:#aaa;font-size:0.85rem;letter-spacing:1px;">SHARE THIS CODE WITH YOUR FRIEND</div>
-    <div class="room-code-display" id="room-code-text">-----</div>
-    <div class="waiting-text">Waiting for opponent to join…</div>
+  <div id="lobby-waiting" style="display:none;flex-direction:column;align-items:center;gap:14px;">
+    <div class="share-label">▼ SHARE CODE WITH FRIEND ▼</div>
+    <div class="room-code-display" id="room-code-text">------</div>
+    <div class="waiting-dots">WAITING FOR PLAYER 2...</div>
   </div>
+
 </div>
 
 <!-- ═══════════════ CHARACTER SELECT ═══════════════ -->
 <div id="charselect-screen" class="screen">
-  <div class="cs-title">SELECT YOUR FIGHTER</div>
+  <div class="cs-title">▶ SELECT YOUR FIGHTER ◀</div>
   <div class="cs-subtitle" id="cs-player-label">YOU ARE PLAYER 1</div>
   <div class="characters-grid" id="characters-grid"></div>
-  <div class="cs-waiting" id="cs-waiting" style="display:none;">Waiting for opponent to pick…</div>
+  <div class="cs-waiting" id="cs-waiting" style="display:none;">WAITING FOR OPPONENT...</div>
 </div>
 
 <!-- ═══════════════ GAME ═══════════════ -->
 <div id="game-screen" class="screen">
   <canvas id="game-canvas"></canvas>
 
-  <!-- HUD -->
   <div class="hud">
     <div class="health-section">
-      <div class="player-hud-name" id="hud-p1-name">PLAYER 1</div>
+      <div class="player-hud-name" id="hud-p1-name">P1</div>
       <div class="health-bar-wrap"><div class="health-bar p1" id="hud-p1-hp" style="width:100%"></div></div>
       <div class="super-bar-wrap"><div class="super-bar p1" id="hud-p1-super" style="width:0%"></div></div>
     </div>
@@ -359,13 +462,12 @@
       <div class="timer" id="hud-timer">99</div>
     </div>
     <div class="health-section right">
-      <div class="player-hud-name" id="hud-p2-name" style="text-align:right;">PLAYER 2</div>
+      <div class="player-hud-name" id="hud-p2-name" style="text-align:right;">P2</div>
       <div class="health-bar-wrap"><div class="health-bar p2" id="hud-p2-hp" style="width:100%"></div></div>
       <div class="super-bar-wrap"><div class="super-bar p2" id="hud-p2-super" style="width:0%"></div></div>
     </div>
   </div>
 
-  <!-- Controls -->
   <div class="controls-overlay">
     <div class="joystick-area" id="joystick-area">
       <div class="joystick-base" id="joystick-base">
@@ -374,7 +476,7 @@
     </div>
     <div class="action-buttons">
       <div class="btn-row">
-        <button class="action-btn btn-block" id="btn-block" ontouchstart="actionPress('block')" ontouchend="actionRelease('block')" onmousedown="actionPress('block')" onmouseup="actionRelease('block')">
+        <button class="action-btn btn-block" ontouchstart="actionPress('block')" ontouchend="actionRelease('block')" onmousedown="actionPress('block')" onmouseup="actionRelease('block')">
           <span class="btn-icon">🛡</span>BLOCK
         </button>
         <button class="action-btn btn-punch" ontouchstart="actionPress('punch')" ontouchend="actionRelease('punch')" onmousedown="actionPress('punch')" onmouseup="actionRelease('punch')">
@@ -392,7 +494,6 @@
     </div>
   </div>
 
-  <!-- Announce overlay -->
   <div class="announce-overlay">
     <div class="announce-text" id="announce-text"></div>
   </div>
@@ -401,12 +502,127 @@
 <!-- ═══════════════ RESULT ═══════════════ -->
 <div id="result-screen" class="screen">
   <div class="result-title" id="result-title">WINNER!</div>
-  <div class="result-sub" id="result-sub">Player 1 wins the match</div>
+  <div class="result-sub" id="result-sub">PLAYER 1 WINS</div>
   <div class="result-btns">
-    <button class="btn btn-primary" onclick="requestRematch()">🔁 &nbsp;REMATCH</button>
-    <button class="btn btn-secondary" onclick="goToLobby()">🏠 &nbsp;LOBBY</button>
+    <button class="btn btn-primary" onclick="requestRematch()" style="width:auto;padding:12px 20px;">⟳ REMATCH</button>
+    <button class="btn btn-secondary" onclick="goToLobby()">⌂ LOBBY</button>
   </div>
 </div>
+
+<script>
+// ── Lobby pixel art ──────────────────────────────────────
+(function() {
+  // Stars
+  const sb = document.getElementById('stars-bg');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() > 0.85 ? 3 : Math.random() > 0.6 ? 2 : 1;
+    s.style.cssText = `width:${size}px;height:${size}px;top:${Math.random()*100}%;left:${Math.random()*100}%;opacity:${0.3+Math.random()*0.7}`;
+    s.style.animation = `blink ${1.5+Math.random()*3}s step-end infinite ${Math.random()*3}s`;
+    sb.appendChild(s);
+  }
+
+  // Fighter silhouettes canvas
+  const fc = document.getElementById('fighter-canvas');
+  const fx = fc.getContext('2d');
+  const W = fc.width, H = fc.height;
+
+  const fighters = [
+    { x:20,  color:'#ff6b35', name:'RYU' },
+    { x:80,  color:'#a855f7', name:'NIN' },
+    { x:140, color:'#64748b', name:'TTN' },
+    { x:200, color:'#ef4444', name:'EMB' },
+    { x:260, color:'#0ea5e9', name:'STM' },
+  ];
+
+  let frame = 0;
+  function drawFighters() {
+    fx.clearRect(0, 0, W, H);
+    fighters.forEach((f, i) => {
+      const bob = Math.sin(frame * 0.05 + i) * 3;
+      const px = f.x;
+      const py = H - 10 + bob;
+      const c = f.color;
+
+      // Shadow
+      fx.fillStyle = 'rgba(0,0,0,0.4)';
+      fx.beginPath(); fx.ellipse(px+24, py+2, 18, 5, 0, 0, Math.PI*2); fx.fill();
+
+      // Body (pixel art blocks)
+      // Legs
+      fx.fillStyle = c;
+      fx.fillRect(px+12, py-24, 8, 16);
+      fx.fillRect(px+24, py-24, 8, 16);
+      // Torso
+      fx.fillStyle = c;
+      fx.fillRect(px+10, py-42, 28, 20);
+      // Belt accent
+      fx.fillStyle = 'rgba(255,255,255,0.3)';
+      fx.fillRect(px+10, py-34, 28, 4);
+      // Head
+      fx.fillStyle = lighten(c);
+      fx.fillRect(px+14, py-58, 20, 18);
+      // Eyes
+      fx.fillStyle = '#000';
+      fx.fillRect(px+17, py-53, 4, 4);
+      fx.fillRect(px+27, py-53, 4, 4);
+      // Arms
+      fx.fillStyle = c;
+      const armBob = Math.sin(frame*0.07+i+1)*4;
+      fx.fillRect(px+2,  py-40+armBob, 8, 14);
+      fx.fillRect(px+38, py-40-armBob, 8, 14);
+
+      // Name label
+      fx.fillStyle = f.color;
+      fx.font = '5px "Press Start 2P", monospace';
+      fx.textAlign = 'center';
+      fx.fillText(f.name, px+24, py+12);
+    });
+
+    // VS text in the middle
+    fx.save();
+    fx.font = '12px "Press Start 2P", monospace';
+    fx.textAlign = 'center';
+    fx.fillStyle = '#f7c948';
+    fx.shadowColor = '#f7c948';
+    fx.shadowBlur = 8;
+    fx.fillText('VS', W/2 - 15, H/2 - 10);
+    fx.shadowBlur = 0;
+    fx.restore();
+
+    frame++;
+    requestAnimationFrame(drawFighters);
+  }
+  drawFighters();
+
+  function lighten(hex) {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return `rgb(${Math.min(255,r+60)},${Math.min(255,g+60)},${Math.min(255,b+60)})`;
+  }
+
+  // Scrolling marquee text at the very bottom via lobby art canvas
+  const lc = document.getElementById('lobby-art');
+  const lx = lc.getContext('2d');
+  lc.width = window.innerWidth; lc.height = window.innerHeight;
+  let marqueeX = lc.width;
+  const marqueeText = '  ★ BATTLE ARENA  ·  SELECT YOUR FIGHTER  ·  CHALLENGE A FRIEND  ·  PRESS START  ★  ';
+  function drawMarquee() {
+    lx.clearRect(0, lc.height-24, lc.width, 24);
+    lx.fillStyle = 'rgba(247,201,72,0.08)';
+    lx.fillRect(0, lc.height-24, lc.width, 24);
+    lx.font = '8px "Press Start 2P", monospace';
+    lx.fillStyle = 'rgba(247,201,72,0.5)';
+    lx.textAlign = 'left';
+    lx.fillText(marqueeText, marqueeX, lc.height-8);
+    marqueeX -= 1.2;
+    const textW = lx.measureText(marqueeText).width;
+    if (marqueeX < -textW) marqueeX = lc.width;
+    requestAnimationFrame(drawMarquee);
+  }
+  drawMarquee();
+})();
+</script>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="characters.js"></script>
