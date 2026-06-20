@@ -157,10 +157,9 @@ function handleMessage(data) {
       showCharSelect();
       break;
 
-    case 'character_selected':
+    case 'character_selected': {
       oppChar = data.characterId;
       charSelectionsReceived[data.playerIndex] = data.characterId;
-      // Mark opponent's card
       const card = document.getElementById(`char-card-${data.characterId}`);
       if (card && !card.querySelector('.tag-opp')) {
         card.classList.add('opponent-selected');
@@ -171,6 +170,7 @@ function handleMessage(data) {
       }
       tryStartGame();
       break;
+    }
 
     case 'game_input':
       applyOpponentInput(data);
@@ -181,8 +181,12 @@ function handleMessage(data) {
       break;
 
     case 'rematch_accept':
-      resetForRematch();
-      showCharSelect();
+      document.getElementById('rematch-status').textContent = 'OPPONENT AGREED! STARTING...';
+      setTimeout(() => { resetForRematch(); showCharSelect(); }, 800);
+      break;
+
+    case 'go_lobby':
+      goToLobby();
       break;
   }
 }
@@ -252,11 +256,16 @@ function tryStartGame() {
   }
 }
 
-// ── Rematch ──────────────────────────────────────────────
+// ── Rematch / lobby ──────────────────────────────────────
 function requestRematch() {
+  document.getElementById('rematch-status').textContent = 'WAITING FOR OPPONENT...';
+  document.getElementById('btn-rematch').disabled = true;
   send({ type: 'rematch_accept' });
-  resetForRematch();
-  showCharSelect();
+}
+
+function sendGoLobby() {
+  send({ type: 'go_lobby' });
+  goToLobby();
 }
 
 function resetForRematch() {
@@ -309,60 +318,46 @@ function startGame(p1Char, p2Char) {
 }
 
 function resizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  canvas.style.width = rect.width + 'px';
-  canvas.style.height = rect.height + 'px';
+  const dpr = Math.min(window.devicePixelRatio || 1, 2); // cap at 2x for perf
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  canvas.width  = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
 }
 window.addEventListener('resize', () => { if (gameRunning) resizeCanvas(); });
+window.addEventListener('orientationchange', () => { setTimeout(() => { if (gameRunning) resizeCanvas(); }, 200); });
+
+function makePlayer(char, x, facing) {
+  return {
+    char, x, y: FLOOR_Y, vx: 0, vy: 0,
+    hp: char.hp, maxHp: char.hp, displayHp: char.hp,
+    superMeter: 0,
+    facing,
+    state: 'idle', stateTimer: 0,
+    superCooldown: 0, frame: 0,
+    onGround: true,
+    hitFlash: 0, hitFlashDir: 1,
+    wasOnGround: true,
+    _hitWindow: 0,
+  };
+}
 
 function initGameState(p1Char, p2Char) {
   const c1 = CHARACTERS[p1Char];
   const c2 = CHARACTERS[p2Char];
-
   gs = {
-    p1: {
-      char: c1,
-      x: 150, y: FLOOR_Y,
-      vx: 0, vy: 0,
-      hp: c1.hp, maxHp: c1.hp,
-      superMeter: 0,
-      facing: 'right',
-      state: 'idle',
-      stateTimer: 0,
-      superCooldown: 0,
-      frame: 0,
-      onGround: true,
-      hitFlash: 0,
-      _hitWindow: 0,
-    },
-    p2: {
-      char: c2,
-      x: STAGE_W - 150 - PLAYER_W, y: FLOOR_Y,
-      vx: 0, vy: 0,
-      hp: c2.hp, maxHp: c2.hp,
-      superMeter: 0,
-      facing: 'left',
-      state: 'idle',
-      stateTimer: 0,
-      superCooldown: 0,
-      frame: 0,
-      onGround: true,
-      hitFlash: 0,
-      _hitWindow: 0,
-    },
-    timer: 99,
-    timerCounter: 0,
-    effects: [],
-    roundOver: false,
-    bgScroll: 0,
+    p1: makePlayer(c1, 150, 'right'),
+    p2: makePlayer(c2, STAGE_W - 150 - PLAYER_W, 'left'),
+    timer: 99, timerCounter: 0,
+    effects: [], roundOver: false, bgScroll: 0,
   };
-
+  hitCooldown.p1 = 0; hitCooldown.p2 = 0;
   updateHUD();
+  SFX.fight();
   announce('FIGHT!', 1400);
 }
 
@@ -386,11 +381,20 @@ function update(dt) {
   applyJoystickToPlayer(me(), dt);
 
   [gs.p1, gs.p2].forEach(p => {
-    if (!p.onGround) p.vy += 0.7 * dt;
+    p.wasOnGround = p.onGround;
+
+    if (!p.onGround) p.vy += 0.75 * dt;
     p.y += p.vy * dt;
     p.x += p.vx * dt;
 
+    // Floor landing
     if (p.y >= FLOOR_Y) {
+      if (!p.wasOnGround) {
+        // Land sound only for my player
+        if (p === me()) SFX.land();
+        // Dust on land
+        spawnDust(p.x + PLAYER_W / 2, FLOOR_Y);
+      }
       p.y = FLOOR_Y; p.vy = 0; p.onGround = true;
       if (p.state === 'jump') p.state = 'idle';
     }
@@ -412,6 +416,9 @@ function update(dt) {
     if (p.hitFlash > 0) p.hitFlash -= dt;
     p.frame += dt;
 
+    // Lagging HP display
+    if (p.displayHp > p.hp) p.displayHp = Math.max(p.hp, p.displayHp - 0.6 * dt);
+
     if (p.state === 'idle' && Math.abs(p.vx) > 0.5) p.state = 'walk';
     if (p.state === 'walk' && Math.abs(p.vx) < 0.5) p.state = 'idle';
   });
@@ -421,7 +428,7 @@ function update(dt) {
 
   gs.effects = gs.effects.filter(e => {
     e.life -= dt; e.x += e.vx * dt; e.y += e.vy * dt; e.size += e.grow * dt;
-    return e.life > 0;
+    return e.life > 0 && e.size > 0;
   });
 
   gs.timerCounter += dt;
@@ -429,11 +436,25 @@ function update(dt) {
     gs.timerCounter = 0;
     gs.timer--;
     document.getElementById('hud-timer').textContent = gs.timer;
+    if (gs.timer <= 10 && gs.timer > 0) SFX.tick();
     if (gs.timer <= 0) endRound('timeout');
   }
 
   gs.bgScroll += 0.3 * dt;
   updateHUD();
+}
+
+function spawnDust(x, y) {
+  for (let i = 0; i < 5; i++) {
+    gs.effects.push({
+      x, y: y - 4, color: 'rgba(200,180,140,0.8)', text: '',
+      type: 'particle',
+      life: FPS * 0.4, maxLife: FPS * 0.4,
+      vx: (Math.random() - 0.5) * 3,
+      vy: -Math.random() * 2,
+      size: 4 + Math.random() * 5, grow: -0.15,
+    });
+  }
 }
 
 const hitCooldown = { p1: 0, p2: 0 };
@@ -454,6 +475,7 @@ function checkHits(attacker, defender) {
     applyDamage(defender, attacker.state === 'super' ? 8 : 2);
     spawnEffect(defender.x + PLAYER_W / 2, defender.y - PLAYER_H * 0.5, '#4488ff', 'BLOCK!', 'shield');
     hitCooldown[cdKey] = FPS * 0.5;
+    if (attacker === me()) SFX.block();
     sendStateSync();
     return;
   }
@@ -465,15 +487,24 @@ function checkHits(attacker, defender) {
 
   applyDamage(defender, dmg);
   attacker.superMeter = Math.min(100, attacker.superMeter + 12);
-  defender.vx = attacker.facing === 'right' ? 6 : -6;
+  defender.vx = attacker.facing === 'right' ? 7 : -7;
   defender.state = 'hurt';
-  defender.stateTimer = FPS * 0.4;
-  defender.hitFlash = FPS * 0.3;
+  defender.stateTimer = FPS * 0.42;
+  defender.hitFlash = FPS * 0.5; // longer flash
+
+  // Sound
+  if (attacker.state === 'super') SFX.hurt();
+  else if (attacker.state === 'kick') SFX.kick();
+  else SFX.punch();
 
   const label = attacker.state === 'super'
     ? attacker.char.superName + '!'
     : attacker.state === 'punch' ? 'PUNCH!' : 'KICK!';
-  spawnEffect(defender.x + PLAYER_W / 2, defender.y - PLAYER_H * 0.6, attacker.state === 'super' ? attacker.char.superColor : '#f7c948', label, 'hit');
+  spawnEffect(
+    defender.x + PLAYER_W / 2, defender.y - PLAYER_H * 0.6,
+    attacker.state === 'super' ? attacker.char.superColor : '#f7c948',
+    label, 'hit'
+  );
   hitCooldown[cdKey] = FPS * 0.6;
 
   sendStateSync();
@@ -503,28 +534,53 @@ function endRound(reason) {
   else winnerIndex = gs.p1.hp >= gs.p2.hp ? 0 : 1;
 
   const isMyWin = winnerIndex === myIndex;
-  announce(reason === 'ko' ? 'K.O.!' : 'TIME!', 1600, () => {
+  const isDraw  = gs.p1.hp === gs.p2.hp && reason !== 'ko';
+
+  SFX.ko();
+
+  announce(reason === 'ko' ? 'K.O.!' : 'TIME!', 1800, () => {
     setTimeout(() => {
       const winner = winnerIndex === 0 ? gs.p1.char.name : gs.p2.char.name;
-      document.getElementById('result-title').textContent = isMyWin ? '🏆 YOU WIN!' : '💀 YOU LOSE';
-      document.getElementById('result-sub').textContent = `${winner} wins · ${reason === 'ko' ? 'K.O.' : 'Time Out'}`;
+      document.getElementById('result-crown').textContent = isDraw ? '🤝' : isMyWin ? '🏆' : '💀';
+      document.getElementById('result-title').textContent = isDraw ? 'DRAW!' : isMyWin ? 'YOU WIN!' : 'YOU LOSE';
+      document.getElementById('result-sub').textContent =
+        isDraw ? 'BOTH FIGHTERS TIED' : `${winner} WINS · ${reason === 'ko' ? 'K.O.' : 'TIME OUT'}`;
+      document.getElementById('rematch-status').textContent = '';
+      document.getElementById('btn-rematch').disabled = false;
+      if (isMyWin) SFX.win(); else SFX.lose();
       showScreen('result-screen');
-    }, 800);
+    }, 900);
   });
 }
 
 function updateHUD() {
   if (!gs) return;
-  document.getElementById('hud-p1-hp').style.width = (gs.p1.hp / gs.p1.maxHp * 100) + '%';
-  document.getElementById('hud-p2-hp').style.width = (gs.p2.hp / gs.p2.maxHp * 100) + '%';
-  document.getElementById('hud-p1-super').style.width = gs.p1.superMeter + '%';
-  document.getElementById('hud-p2-super').style.width = gs.p2.superMeter + '%';
-  document.getElementById('hud-p1-name').textContent = gs.p1.char.name;
-  document.getElementById('hud-p2-name').textContent = gs.p2.char.name;
+  const p1Pct = gs.p1.hp / gs.p1.maxHp * 100;
+  const p2Pct = gs.p2.hp / gs.p2.maxHp * 100;
+  const p1LagPct = gs.p1.displayHp / gs.p1.maxHp * 100;
+  const p2LagPct = gs.p2.displayHp / gs.p2.maxHp * 100;
+
+  document.getElementById('hud-p1-hp').style.width     = p1Pct + '%';
+  document.getElementById('hud-p2-hp').style.width     = p2Pct + '%';
+  document.getElementById('hud-p1-hp-lag').style.width = p1LagPct + '%';
+  document.getElementById('hud-p2-hp-lag').style.width = p2LagPct + '%';
+  document.getElementById('hud-p1-super').style.width  = gs.p1.superMeter + '%';
+  document.getElementById('hud-p2-super').style.width  = gs.p2.superMeter + '%';
+  document.getElementById('hud-p1-name').textContent   = gs.p1.char.name;
+  document.getElementById('hud-p2-name').textContent   = gs.p2.char.name;
+
+  // Color health bar red when low
+  const p1Bar = document.getElementById('hud-p1-hp');
+  const p2Bar = document.getElementById('hud-p2-hp');
+  p1Bar.style.background = p1Pct < 25 ? 'linear-gradient(90deg,#ff0000,#ff4400)' : 'linear-gradient(90deg,#ff2222,#ff5533)';
+  p2Bar.style.background = p2Pct < 25 ? 'linear-gradient(90deg,#0044ff,#ff0000)' : 'linear-gradient(90deg,#1177ff,#33ccff)';
+
   const myP = me();
   const superBtn = document.getElementById('btn-super');
-  superBtn.querySelector('.btn-icon').textContent = myP.char.superIcon;
-  superBtn.classList.toggle('on-cooldown', myP.superMeter < 100 || myP.superCooldown > 0);
+  if (superBtn) {
+    superBtn.querySelector('.btn-icon').textContent = myP.char.superIcon;
+    superBtn.classList.toggle('on-cooldown', myP.superMeter < 100 || myP.superCooldown > 0);
+  }
 }
 
 // ── Render ────────────────────────────────────────────────
@@ -586,12 +642,43 @@ function drawBackground() {
 function drawPlayers() {
   [gs.p1, gs.p2].forEach(p => {
     const px = Math.round(p.x);
-    const py = Math.round(p.y - PLAYER_H);
-    if (p.hitFlash > 0 && Math.floor(p.hitFlash * 3) % 2 === 0) ctx.globalAlpha = 0.4;
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(px + PLAYER_W/2, p.y + 4, PLAYER_W*0.4, 8, 0, 0, Math.PI*2); ctx.fill();
-    p.char.drawBody(ctx, px, py, PLAYER_W, PLAYER_H, p.facing, p.state, p.frame);
-    ctx.globalAlpha = 1;
+    const basePy = Math.round(p.y - PLAYER_H);
+
+    // Duck: compress character height
+    const isDuck = p.state === 'duck';
+    const py   = isDuck ? basePy + PLAYER_H * 0.32 : basePy;
+    const pH   = isDuck ? PLAYER_H * 0.68 : PLAYER_H;
+
+    // Floor shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(px + PLAYER_W / 2, p.y + 4, PLAYER_W * (isDuck ? 0.5 : 0.38), isDuck ? 10 : 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw character
+    p.char.drawBody(ctx, px, py, PLAYER_W, pH, p.facing, p.state, p.frame);
+
+    // Red damage flash overlay — strobes on/off
+    if (p.hitFlash > 0) {
+      const strobe = Math.floor(p.hitFlash * 6) % 2 === 0;
+      if (strobe) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = `rgba(255,0,0,${Math.min(0.75, p.hitFlash / (FPS * 0.5) * 0.75)})`;
+        ctx.fillRect(px - 2, py - 2, PLAYER_W + 4, pH + 4);
+        ctx.restore();
+      }
+    }
+
+    // DUCK label
+    if (isDuck) {
+      ctx.save();
+      ctx.font = 'bold 9px monospace';
+      ctx.fillStyle = '#4af';
+      ctx.textAlign = 'center';
+      ctx.fillText('DUCK', px + PLAYER_W / 2, py - 6);
+      ctx.restore();
+    }
   });
 }
 
@@ -625,43 +712,89 @@ function announce(text, duration = 1200, cb) {
 //  JOYSTICK
 // ══════════════════════════════════════════════════════════
 
-const joystickState = { dx: 0, dy: 0, active: false };
+const joystickState = { dx: 0, dy: 0, active: false, touchId: null };
 const joystickBase = document.getElementById('joystick-base');
 const joystickKnob = document.getElementById('joystick-knob');
-const MAX_KNOB_DIST = 38;
 
-function getJoystickPos(e) {
+function getMaxKnob() {
+  return joystickBase.clientWidth * 0.38;
+}
+
+function getJoystickPos(clientX, clientY) {
   const rect = joystickBase.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2;
-  const touch = e.touches ? e.touches[0] : e;
-  return { x: touch.clientX - cx, y: touch.clientY - cy };
+  return { x: clientX - (rect.left + rect.width / 2), y: clientY - (rect.top + rect.height / 2) };
 }
 
-function joystickStart(e) { e.preventDefault(); joystickState.active = true; joystickMove(e); }
-function joystickMove(e) {
-  if (!joystickState.active) return;
-  e.preventDefault();
-  const { x, y } = getJoystickPos(e);
-  const dist = Math.sqrt(x*x + y*y);
-  const clamp = Math.min(dist, MAX_KNOB_DIST);
-  const nx = dist > 0 ? (x/dist)*clamp : 0;
-  const ny = dist > 0 ? (y/dist)*clamp : 0;
+function updateKnob(x, y) {
+  const MAX = getMaxKnob();
+  const dist = Math.sqrt(x * x + y * y);
+  const clamp = Math.min(dist, MAX);
+  const nx = dist > 0 ? (x / dist) * clamp : 0;
+  const ny = dist > 0 ? (y / dist) * clamp : 0;
   joystickKnob.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
-  joystickState.dx = dist > 8 ? x/dist : 0;
-  joystickState.dy = dist > 8 ? y/dist : 0;
-}
-function joystickEnd() {
-  joystickState.active = false; joystickState.dx = 0; joystickState.dy = 0;
-  joystickKnob.style.transform = 'translate(-50%, -50%)';
+  joystickState.dx = dist > 8 ? x / dist : 0;
+  joystickState.dy = dist > 8 ? y / dist : 0;
 }
 
-joystickBase.addEventListener('touchstart', joystickStart, { passive: false });
-joystickBase.addEventListener('touchmove', joystickMove, { passive: false });
-joystickBase.addEventListener('touchend', joystickEnd);
-joystickBase.addEventListener('mousedown', joystickStart);
-window.addEventListener('mousemove', (e) => { if (joystickState.active) joystickMove(e); });
-window.addEventListener('mouseup', joystickEnd);
+joystickBase.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (joystickState.touchId !== null) return;
+  const t = e.changedTouches[0];
+  joystickState.touchId = t.identifier;
+  joystickState.active = true;
+  const pos = getJoystickPos(t.clientX, t.clientY);
+  updateKnob(pos.x, pos.y);
+}, { passive: false });
+
+joystickBase.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystickState.touchId) {
+      const pos = getJoystickPos(t.clientX, t.clientY);
+      updateKnob(pos.x, pos.y);
+    }
+  }
+}, { passive: false });
+
+joystickBase.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystickState.touchId) {
+      joystickState.touchId = null;
+      joystickState.active = false;
+      joystickState.dx = 0; joystickState.dy = 0;
+      joystickKnob.style.transform = 'translate(-50%, -50%)';
+    }
+  }
+}, { passive: false });
+
+joystickBase.addEventListener('touchcancel', (e) => {
+  joystickState.touchId = null; joystickState.active = false;
+  joystickState.dx = 0; joystickState.dy = 0;
+  joystickKnob.style.transform = 'translate(-50%, -50%)';
+});
+
+// Mouse fallback for desktop testing
+let mouseDragging = false;
+joystickBase.addEventListener('mousedown', (e) => {
+  mouseDragging = true; joystickState.active = true;
+  const pos = getJoystickPos(e.clientX, e.clientY);
+  updateKnob(pos.x, pos.y);
+});
+window.addEventListener('mousemove', (e) => {
+  if (!mouseDragging) return;
+  const pos = getJoystickPos(e.clientX, e.clientY);
+  updateKnob(pos.x, pos.y);
+});
+window.addEventListener('mouseup', () => {
+  if (!mouseDragging) return;
+  mouseDragging = false; joystickState.active = false;
+  joystickState.dx = 0; joystickState.dy = 0;
+  joystickKnob.style.transform = 'translate(-50%, -50%)';
+});
+
+// Prevent all default touch behavior on the game screen to stop scroll/zoom
+document.getElementById('game-screen').addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
 function applyJoystickToPlayer(player, dt) {
   if (!joystickState.active) { player.vx *= 0.7; return; }
@@ -671,10 +804,11 @@ function applyJoystickToPlayer(player, dt) {
 
   if (dy < -0.5 && player.onGround && player.state !== 'duck') {
     player.vy = -14; player.onGround = false; player.state = 'jump';
+    SFX.jump();
     sendInput('jump');
   }
   if (dy > 0.5 && player.onGround) {
-    if (player.state !== 'duck') { player.state = 'duck'; sendInput('duck'); }
+    if (player.state !== 'duck') { player.state = 'duck'; SFX.duck(); sendInput('duck'); }
   } else if (player.state === 'duck') {
     player.state = 'idle';
   }
@@ -691,15 +825,18 @@ function actionPress(action) {
   if (action === 'punch' && attackCooldowns.punch <= 0) {
     p.state = 'punch'; p._hitWindow = FPS*0.25; p.stateTimer = FPS*0.45;
     attackCooldowns.punch = FPS*0.55;
+    SFX.punch();
     sendInput('punch');
   } else if (action === 'kick' && attackCooldowns.kick <= 0) {
     p.state = 'kick'; p._hitWindow = FPS*0.3; p.stateTimer = FPS*0.55;
     attackCooldowns.kick = FPS*0.65;
+    SFX.kick();
     sendInput('kick');
   } else if (action === 'super' && p.superMeter >= 100 && p.superCooldown <= 0) {
     p.state = 'super'; p._hitWindow = FPS*0.4; p.stateTimer = FPS*0.7;
     p.superMeter = 0; p.superCooldown = FPS*3;
     attackCooldowns.super = FPS*0.8;
+    SFX.super_();
     spawnSuperEffect(p);
     sendInput('super');
   } else if (action === 'block') {

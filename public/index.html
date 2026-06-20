@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Battle Arena</title>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <style>
@@ -16,20 +16,23 @@
       --bg:     #05050f;
       --panel:  #0d0d22;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     body {
       background: var(--bg);
       color: #fff;
       font-family: var(--pixel);
       overflow: hidden;
-      width: 100vw;
+      position: fixed;
+      width: 100%;
       height: 100vh;
+      height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       image-rendering: pixelated;
+      touch-action: none;
     }
 
     /* ─── SCANLINES ─── */
@@ -58,7 +61,7 @@
     }
 
     /* ─── SCREENS ─── */
-    .screen { display: none; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+    .screen { display: none; width: 100%; height: 100%; height: 100dvh; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
     .screen.active { display: flex; }
 
     /* ══════════════════════════════════════
@@ -344,37 +347,88 @@
     #game-screen { position: relative; width: 100%; height: 100%; overflow: hidden; }
     #game-canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
 
-    .hud { position: absolute; top: 0; left: 0; right: 0; padding: 8px 12px; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; z-index: 10; }
-    .health-section { flex: 1; }
+    .hud { position: absolute; top: 0; left: 0; right: 0; padding: 8px 10px; display: flex; align-items: flex-start; justify-content: space-between; pointer-events: none; z-index: 10; }
+    .health-section { flex: 1; min-width: 0; }
     .health-section.right { display: flex; flex-direction: column; align-items: flex-end; }
-    .player-hud-name { font-family: var(--pixel); font-size: 0.45rem; letter-spacing: 1px; margin-bottom: 4px; color: #fff; text-shadow: 1px 1px 0 #000; }
-    .health-bar-wrap { width: 100%; max-width: 240px; height: 16px; background: #000; border: 2px solid #555; overflow: hidden; }
-    .health-bar { height: 100%; transition: width 0.15s ease; }
-    .health-bar.p1 { background: linear-gradient(90deg, #ff2222, #ff6b35); }
-    .health-bar.p2 { background: linear-gradient(90deg, #2244ff, #44ddff); float: right; }
-    .timer-box { display: flex; flex-direction: column; align-items: center; min-width: 60px; }
-    .timer { font-family: var(--pixel); font-size: 1.6rem; color: var(--gold); line-height: 1; text-shadow: 2px 2px 0 #7a5500; }
-    .round-label { font-family: var(--pixel); font-size: 0.35rem; color: #aaa; letter-spacing: 2px; }
-    .super-bar-wrap { width: 100%; max-width: 240px; height: 7px; background: #000; border: 1px solid #333; overflow: hidden; margin-top: 3px; }
+    .player-hud-name { font-family: var(--pixel); font-size: clamp(0.35rem, 1.2vw, 0.55rem); letter-spacing: 1px; margin-bottom: 5px; color: #fff; text-shadow: 1px 1px 0 #000; }
+
+    /* Health bar — dual-layer with lagging drain */
+    .health-bar-wrap {
+      width: 100%; max-width: 280px; height: 22px;
+      background: #000;
+      border: 3px solid #888;
+      box-shadow: 0 0 8px rgba(255,100,50,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+      overflow: hidden;
+      position: relative;
+    }
+    .health-section.right .health-bar-wrap { margin-left: auto; }
+    .health-bar-lag { position: absolute; top: 0; height: 100%; transition: width 0.7s ease; }
+    .health-bar-lag.p1 { left: 0; background: #f7c948; }
+    .health-bar-lag.p2 { right: 0; background: #f7c948; }
+    .health-bar { height: 100%; position: relative; }
+    .health-bar.p1 { background: linear-gradient(90deg, #ff2222, #ff5533); box-shadow: inset 0 2px 0 rgba(255,180,150,0.4); }
+    .health-bar.p2 { background: linear-gradient(90deg, #1177ff, #33ccff); float: right; box-shadow: inset 0 2px 0 rgba(150,220,255,0.4); }
+
+    .timer-box { display: flex; flex-direction: column; align-items: center; min-width: 50px; flex-shrink: 0; }
+    .timer { font-family: var(--pixel); font-size: clamp(1.2rem, 4vw, 1.8rem); color: var(--gold); line-height: 1; text-shadow: 2px 2px 0 #7a5500; }
+    .round-label { font-family: var(--pixel); font-size: 0.3rem; color: #aaa; letter-spacing: 2px; margin-bottom: 2px; }
+
+    /* Super meter */
+    .super-label { font-family: var(--pixel); font-size: 0.3rem; color: #a855f7; letter-spacing: 1px; margin-top: 4px; }
+    .health-section.right .super-label { text-align: right; }
+    .super-bar-wrap { width: 100%; max-width: 280px; height: 10px; background: #000; border: 2px solid #555; overflow: hidden; margin-top: 2px; position: relative; }
+    .health-section.right .super-bar-wrap { margin-left: auto; }
     .super-bar { height: 100%; transition: width 0.2s ease; }
-    .super-bar.p1 { background: linear-gradient(90deg, #a855f7, #ec4899); }
-    .super-bar.p2 { background: linear-gradient(90deg, #06b6d4, #a855f7); float: right; }
+    .super-bar.p1 { background: linear-gradient(90deg, #7c3aed, #ec4899); box-shadow: 0 0 6px rgba(168,85,247,0.6); }
+    .super-bar.p2 { background: linear-gradient(90deg, #0891b2, #7c3aed); float: right; box-shadow: 0 0 6px rgba(168,85,247,0.6); }
 
-    .controls-overlay { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-end; padding: 10px 14px 14px; pointer-events: none; z-index: 10; }
-    .joystick-area { width: 140px; height: 140px; position: relative; pointer-events: all; }
-    .joystick-base { width: 120px; height: 120px; background: rgba(0,0,0,0.6); border: 3px solid rgba(255,255,255,0.2); border-radius: 50%; position: absolute; top: 10px; left: 10px; }
-    .joystick-knob { width: 44px; height: 44px; background: radial-gradient(circle, rgba(255,255,255,0.6), rgba(255,255,255,0.2)); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); transition: transform 0.05s; pointer-events: none; }
+    .controls-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      padding: 8px 12px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+      pointer-events: none; z-index: 10;
+    }
+    .joystick-area { width: clamp(110px, 22vw, 150px); height: clamp(110px, 22vw, 150px); position: relative; pointer-events: all; touch-action: none; }
+    .joystick-base {
+      width: 90%; height: 90%;
+      background: rgba(0,0,0,0.65);
+      border: 3px solid rgba(255,255,255,0.25);
+      border-radius: 50%;
+      position: absolute; top: 5%; left: 5%;
+    }
+    .joystick-knob {
+      width: 40%; height: 40%;
+      background: radial-gradient(circle, rgba(255,255,255,0.7), rgba(255,255,255,0.2));
+      border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 50%;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      pointer-events: none;
+    }
 
-    .action-buttons { display: flex; flex-direction: column; gap: 8px; pointer-events: all; }
-    .btn-row { display: flex; gap: 8px; justify-content: flex-end; }
-    .action-btn { width: 64px; height: 64px; border-radius: 50%; border: 3px solid; font-family: var(--pixel); font-size: 0.4rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; transition: all 0.08s; -webkit-tap-highlight-color: transparent; user-select: none; }
-    .action-btn .btn-icon { font-size: 1.2rem; line-height: 1; }
-    .action-btn:active { transform: scale(0.87); }
-    .btn-punch { background: #c0392b; border-color: #ff7766; color: #fff; box-shadow: 0 4px 0 #7a0000, 0 0 12px rgba(255,60,50,0.4); }
-    .btn-kick  { background: #c47f0a; border-color: #f7c948; color: #fff; box-shadow: 0 4px 0 #6b5500, 0 0 12px rgba(247,201,72,0.4); }
-    .btn-super { background: #6d28d9; border-color: #c084fc; color: #fff; box-shadow: 0 4px 0 #3b0a8a, 0 0 14px rgba(168,85,247,0.5); width: 72px; height: 72px; }
-    .btn-block { background: #1d4ed8; border-color: #60a5fa; color: #fff; box-shadow: 0 4px 0 #0a2070, 0 0 12px rgba(68,136,255,0.4); }
-    .btn-super.on-cooldown { opacity: 0.35; }
+    .action-buttons { display: flex; flex-direction: column; gap: 6px; pointer-events: all; touch-action: none; }
+    .btn-row { display: flex; gap: 6px; justify-content: flex-end; }
+    .action-btn {
+      width: clamp(54px, 12vw, 68px); height: clamp(54px, 12vw, 68px);
+      border-radius: 50%; border: 3px solid;
+      font-family: var(--pixel); font-size: 0.38rem;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px;
+      transition: transform 0.08s, box-shadow 0.08s;
+      user-select: none; touch-action: none;
+    }
+    .action-btn .btn-icon { font-size: clamp(1rem, 3vw, 1.3rem); line-height: 1; }
+    .action-btn:active { transform: scale(0.85) translateY(3px); }
+    .btn-punch { background: #c0392b; border-color: #ff7766; color: #fff; box-shadow: 0 5px 0 #7a0000, 0 0 14px rgba(255,60,50,0.5); }
+    .btn-kick  { background: #c47f0a; border-color: #f7c948; color: #fff; box-shadow: 0 5px 0 #6b5500, 0 0 14px rgba(247,201,72,0.5); }
+    .btn-super {
+      background: #6d28d9; border-color: #c084fc; color: #fff;
+      box-shadow: 0 5px 0 #3b0a8a, 0 0 16px rgba(168,85,247,0.6);
+      width: clamp(60px, 14vw, 76px); height: clamp(60px, 14vw, 76px);
+    }
+    .btn-block { background: #1d4ed8; border-color: #60a5fa; color: #fff; box-shadow: 0 5px 0 #0a2070, 0 0 12px rgba(68,136,255,0.4); }
+    .btn-super.on-cooldown { opacity: 0.35; box-shadow: none; }
 
     .announce-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none; }
     .announce-text { font-family: var(--pixel); font-size: clamp(1.5rem, 8vw, 3.5rem); text-align: center; color: #fff; text-shadow: 4px 4px 0 var(--red), 8px 8px 0 rgba(0,0,0,0.5); letter-spacing: 4px; opacity: 0; transform: scale(0.5); transition: all 0.2s cubic-bezier(0.175,0.885,0.32,1.275); }
@@ -383,10 +437,12 @@
     /* ══════════════════════════════════════
        RESULT SCREEN
     ══════════════════════════════════════ */
-    #result-screen { background: rgba(0,0,0,0.9); gap: 20px; z-index: 30; }
-    .result-title { font-family: var(--pixel); font-size: clamp(1rem, 5vw, 2rem); letter-spacing: 3px; text-shadow: 4px 4px 0 var(--red); }
-    .result-sub { font-family: var(--pixel); font-size: 0.45rem; color: #aaa; letter-spacing: 1px; }
-    .result-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+    #result-screen { background: rgba(0,0,0,0.92); gap: 20px; z-index: 30; }
+    .result-crown { font-size: clamp(3rem, 12vw, 5rem); animation: bounce 0.6s ease infinite alternate; }
+    @keyframes bounce { from{transform:translateY(0)} to{transform:translateY(-10px)} }
+    .result-title { font-family: var(--pixel); font-size: clamp(0.9rem, 4vw, 1.8rem); letter-spacing: 3px; text-shadow: 4px 4px 0 var(--red); text-align: center; }
+    .result-sub { font-family: var(--pixel); font-size: clamp(0.35rem, 1.2vw, 0.5rem); color: #aaa; letter-spacing: 1px; text-align: center; }
+    .result-btns { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 
     @media (max-width: 480px) {
       .action-btn { width: 56px; height: 56px; }
@@ -454,7 +510,11 @@
   <div class="hud">
     <div class="health-section">
       <div class="player-hud-name" id="hud-p1-name">P1</div>
-      <div class="health-bar-wrap"><div class="health-bar p1" id="hud-p1-hp" style="width:100%"></div></div>
+      <div class="health-bar-wrap">
+        <div class="health-bar-lag p1" id="hud-p1-hp-lag" style="width:100%"></div>
+        <div class="health-bar p1" id="hud-p1-hp" style="width:100%"></div>
+      </div>
+      <div class="super-label">SUPER</div>
       <div class="super-bar-wrap"><div class="super-bar p1" id="hud-p1-super" style="width:0%"></div></div>
     </div>
     <div class="timer-box">
@@ -463,7 +523,11 @@
     </div>
     <div class="health-section right">
       <div class="player-hud-name" id="hud-p2-name" style="text-align:right;">P2</div>
-      <div class="health-bar-wrap"><div class="health-bar p2" id="hud-p2-hp" style="width:100%"></div></div>
+      <div class="health-bar-wrap">
+        <div class="health-bar-lag p2" id="hud-p2-hp-lag" style="width:100%"></div>
+        <div class="health-bar p2" id="hud-p2-hp" style="width:100%"></div>
+      </div>
+      <div class="super-label" style="text-align:right;">SUPER</div>
       <div class="super-bar-wrap"><div class="super-bar p2" id="hud-p2-super" style="width:0%"></div></div>
     </div>
   </div>
@@ -501,12 +565,14 @@
 
 <!-- ═══════════════ RESULT ═══════════════ -->
 <div id="result-screen" class="screen">
-  <div class="result-title" id="result-title">WINNER!</div>
-  <div class="result-sub" id="result-sub">PLAYER 1 WINS</div>
+  <div class="result-crown" id="result-crown">🏆</div>
+  <div class="result-title" id="result-title">YOU WIN!</div>
+  <div class="result-sub" id="result-sub">PLAYER 1 WINS · K.O.</div>
   <div class="result-btns">
-    <button class="btn btn-primary" onclick="requestRematch()" style="width:auto;padding:12px 20px;">⟳ REMATCH</button>
-    <button class="btn btn-secondary" onclick="goToLobby()">⌂ LOBBY</button>
+    <button class="btn btn-primary" id="btn-rematch" onclick="requestRematch()" style="width:auto;padding:12px 20px;">⟳ REMATCH</button>
+    <button class="btn btn-secondary" onclick="sendGoLobby()" style="width:auto;padding:12px 16px;">✕ NO REMATCH</button>
   </div>
+  <div id="rematch-status" style="font-family:var(--pixel);font-size:0.38rem;color:#888;margin-top:10px;letter-spacing:1px;min-height:1em;"></div>
 </div>
 
 <script>
@@ -625,6 +691,7 @@
 </script>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="sounds.js"></script>
 <script src="characters.js"></script>
 <script src="game.js"></script>
 </body>
