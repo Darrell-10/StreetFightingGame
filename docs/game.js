@@ -28,9 +28,10 @@ function showError(msg) {
 // ── Init PeerJS ──────────────────────────────────────────
 function initPeer(id) {
   return new Promise((resolve, reject) => {
+    // Always use lowercase IDs — PeerJS treats IDs as case-sensitive
     const p = id
-      ? new Peer(id, { debug: 0 })
-      : new Peer({ debug: 0 });
+      ? new Peer(id.toLowerCase(), { debug: 1 })
+      : new Peer({ debug: 1 });
 
     p.on('open', (assignedId) => resolve({ peer: p, id: assignedId }));
     p.on('error', (err) => reject(err));
@@ -41,82 +42,102 @@ function initPeer(id) {
 async function createRoom() {
   const btn = document.querySelector('.btn-primary');
   try {
-    btn.textContent = 'Connecting…';
+    btn.textContent = 'CONNECTING...';
     btn.disabled = true;
 
-    // Use a short random code as the actual peer ID so guest can connect directly
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const result = await initPeer(code);
+    // Generate a short lowercase peer ID; display as uppercase to user
+    const peerId = Math.random().toString(36).substring(2, 8).toLowerCase();
+    const displayCode = peerId.toUpperCase();
+
+    const result = await initPeer(peerId);
     peer = result.peer;
     myIndex = 0;
 
     document.getElementById('lobby-main').style.display = 'none';
     document.getElementById('lobby-waiting').style.display = 'flex';
-    document.getElementById('room-code-text').textContent = code;
+    document.getElementById('room-code-text').textContent = displayCode;
 
     peer.on('connection', (c) => {
       conn = c;
-      setupConnection();
-      send({ type: 'welcome', playerIndex: 1 });
-      setTimeout(() => {
+      setupDataListeners(c);
+
+      // IMPORTANT: wait for connection to be open before sending anything
+      c.on('open', () => {
+        send({ type: 'welcome', playerIndex: 1 });
         send({ type: 'go_charselect' });
         showCharSelect();
-      }, 300);
+      });
     });
   } catch (e) {
-    showError('Connection error. Try again.');
+    showError('CONNECTION ERROR — TRY AGAIN');
+    console.error(e);
   } finally {
-    btn.textContent = '⚔️  CREATE ROOM';
+    btn.textContent = '⚔ CREATE ROOM';
     btn.disabled = false;
   }
 }
 
 // ── Join Room (guest) ────────────────────────────────────
 async function joinRoom() {
-  const codeInput = document.getElementById('join-code-input').value.trim().toUpperCase();
-  if (!codeInput || codeInput.length < 4) { showError('Enter the room code'); return; }
+  const codeInput = document.getElementById('join-code-input').value.trim();
+  if (!codeInput || codeInput.length < 4) { showError('ENTER THE ROOM CODE'); return; }
 
   const joinBtn = document.querySelector('.btn-secondary');
   const input = document.getElementById('join-code-input');
-  joinBtn.textContent = '…'; joinBtn.disabled = true; input.disabled = true;
+  joinBtn.textContent = '...'; joinBtn.disabled = true; input.disabled = true;
+
+  // Connection timeout — show error if no response in 8s
+  let joinTimeout = setTimeout(() => {
+    showError('NO ROOM FOUND — CHECK THE CODE');
+    joinBtn.textContent = 'JOIN'; joinBtn.disabled = false; input.disabled = false;
+    if (peer) { peer.destroy(); peer = null; }
+  }, 8000);
 
   try {
-    const result = await initPeer();
+    const result = await initPeer(); // guest gets a random ID
     peer = result.peer;
     myIndex = 1;
 
-    // Host's peer ID is the room code (lowercase, as PeerJS IDs are lowercase)
-    conn = peer.connect(codeInput.toLowerCase(), { reliable: true });
-    setupConnection();
+    const hostPeerId = codeInput.toLowerCase(); // host always uses lowercase
+    conn = peer.connect(hostPeerId, { reliable: true });
 
-    conn.on('error', () => showError('Room not found. Check the code.'));
+    setupDataListeners(conn);
+
+    conn.on('open', () => {
+      clearTimeout(joinTimeout);
+      // Guest is connected — host will send go_charselect
+      document.getElementById('lobby-main').style.display = 'none';
+      document.getElementById('lobby-waiting').style.display = 'flex';
+      document.getElementById('room-code-text').textContent = codeInput.toUpperCase();
+      document.querySelector('.waiting-dots').textContent = 'CONNECTED! WAITING...';
+    });
+
+    conn.on('error', (err) => {
+      clearTimeout(joinTimeout);
+      showError('ROOM NOT FOUND — CHECK THE CODE');
+      console.error(err);
+      joinBtn.textContent = 'JOIN'; joinBtn.disabled = false; input.disabled = false;
+    });
   } catch (e) {
-    showError('Connection error. Try again.');
-  } finally {
+    clearTimeout(joinTimeout);
+    showError('CONNECTION ERROR — TRY AGAIN');
+    console.error(e);
     joinBtn.textContent = 'JOIN'; joinBtn.disabled = false; input.disabled = false;
   }
 }
 
-// ── Connection setup ─────────────────────────────────────
-function setupConnection() {
-  conn.on('open', () => {
-    console.log('Connection established');
-  });
+// ── Connection data listeners ─────────────────────────────
+function setupDataListeners(c) {
+  c.on('data', (data) => handleMessage(data));
 
-  conn.on('data', (data) => {
-    handleMessage(data);
-  });
-
-  conn.on('close', () => {
+  c.on('close', () => {
     if (gameRunning) {
       gameRunning = false;
       announce('OPPONENT DISCONNECTED', 2000, () => goToLobby());
     }
   });
 
-  conn.on('error', (err) => {
-    console.error('Connection error:', err);
-  });
+  c.on('error', (err) => console.error('Conn error:', err));
 }
 
 function send(data) {
